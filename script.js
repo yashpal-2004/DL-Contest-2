@@ -175,8 +175,30 @@ function renderPracticeQuiz(formId, data) {
   const button = document.querySelector(`[data-quiz="${formId}"]`);
   const result = document.getElementById(button.dataset.result);
   const cards = [...practiceForm.querySelectorAll(".question")];
-  practiceForm.addEventListener("change", () => { button.disabled = practiceForm.querySelectorAll("input:checked").length !== cards.length; });
-  button.addEventListener("click", () => { let score = 0; cards.forEach(card => { const answer = Number(card.dataset.answer); const selected = Number(card.querySelector("input:checked").value); const correct = selected === answer; if (correct) score++; card.classList.add(correct ? "answered-correct" : "answered-wrong"); card.querySelectorAll("input").forEach(input => input.disabled = true); const note = document.createElement("p"); note.className = "explanation"; note.textContent = correct ? "Correct" : `Correct answer: ${letters[answer]}`; card.append(note); }); result.textContent = `Score: ${score} / ${cards.length}`; button.disabled = true; });
+  const storageKey = `dl-contest-2-answers:${formId}`;
+  button.hidden = true;
+  const savedScore = () => cards.filter(card => card.classList.contains("answered-correct")).length;
+  const save = () => { try { localStorage.setItem(storageKey, JSON.stringify(cards.map(card => card.querySelector("input:checked")?.value ?? null))); } catch (_) {} };
+  const answerQuestion = (card, index) => {
+    if (card.dataset.checked === "true") return;
+    const selectedInput = card.querySelector("input:checked"); if (!selectedInput) return;
+    const answer = Number(card.dataset.answer); const correct = Number(selectedInput.value) === answer;
+    card.dataset.checked = "true"; card.classList.add(correct ? "answered-correct" : "answered-wrong");
+    card.querySelectorAll("input").forEach(input => input.disabled = true);
+    const note = document.createElement("p"); note.className = "explanation";
+    const explanation = data[index]?.[3] || "";
+    note.textContent = `${correct ? "Correct!" : `Incorrect. Correct answer: ${letters[answer]}.`}${explanation ? ` ${explanation}` : ""}`; card.append(note);
+    const answered = cards.filter(item => item.dataset.checked === "true").length;
+    result.textContent = answered === cards.length ? `Quiz complete · Score: ${savedScore()} / ${cards.length}` : `${correct ? "Correct" : "Incorrect"} · Score: ${savedScore()} / ${answered} answered`;
+    save();
+  };
+  practiceForm.addEventListener("change", event => { const card = event.target.closest(".question"); if (card) answerQuestion(card, cards.indexOf(card)); });
+  let saved = null; try { saved = JSON.parse(localStorage.getItem(storageKey) || "null"); } catch (_) {}
+  if (Array.isArray(saved)) cards.forEach((card, index) => {
+    if (saved[index] == null) return;
+    const input = card.querySelector(`input[value="${CSS.escape(String(saved[index]))}"]`); if (!input) return;
+    input.checked = true; answerQuestion(card, index);
+  });
 }
 renderPracticeQuiz("unit1-quiz", unit1questions);
 renderPracticeQuiz("unit2-quiz", unit2questions);
@@ -189,8 +211,22 @@ const mockForm = document.querySelector("#quiz");
 let unitNumber = 0, questionNumber = 0;
 questions.forEach(([unit, qs]) => { const title = document.createElement("h3"); title.className = "unit-title"; unitNumber++; title.textContent = `Unit ${unitNumber} – ${unit} (Q${questionNumber + 1}–${questionNumber + qs.length})`; mockForm.append(title); qs.forEach(([prompt, options, answer, explanation]) => { makeQuestion(mockForm, prompt, options, answer, questionNumber++, "mock"); const field = mockForm.lastElementChild; field.dataset.explanation = explanation; }); });
 const mockCards = [...mockForm.querySelectorAll(".question")]; const progress = document.querySelector("#progress"); const submit = document.querySelector("#submit");
-mockForm.addEventListener("change", () => { const count = mockForm.querySelectorAll("input:checked").length; progress.textContent = `${count} / 35`; submit.disabled = count !== 35; });
-submit.addEventListener("click", () => { let score = 0; mockCards.forEach(card => { const correctAnswer = Number(card.dataset.answer); const correct = Number(card.querySelector("input:checked").value) === correctAnswer; if (correct) score++; card.classList.add(correct ? "answered-correct" : "answered-wrong"); card.querySelectorAll("input").forEach(input => input.disabled = true); const note = document.createElement("p"); note.className = "explanation"; note.textContent = `${correct ? "Correct" : `Correct answer: ${letters[correctAnswer]}`} · ${card.dataset.explanation}`; card.append(note); }); const band = score >= 32 ? "Excellent" : score >= 28 ? "Very good" : score >= 21 ? "Needs revision" : "Revise all units"; document.querySelector("#result").textContent = `Score: ${score} / 35 — ${band}`; submit.disabled = true; });
+const mockStorageKey = "dl-contest-2-answers:quiz"; submit.hidden = true;
+function answerMockQuestion(card, index) {
+  if (card.dataset.checked === "true") return;
+  const selected = card.querySelector("input:checked"); if (!selected) return;
+  const answer = Number(card.dataset.answer); const correct = Number(selected.value) === answer;
+  card.dataset.checked = "true"; card.classList.add(correct ? "answered-correct" : "answered-wrong");
+  card.querySelectorAll("input").forEach(input => input.disabled = true);
+  const note = document.createElement("p"); note.className = "explanation"; note.textContent = `${correct ? "Correct!" : `Incorrect. Correct answer: ${letters[answer]}.`} ${card.dataset.explanation || ""}`; card.append(note);
+  const answered = mockCards.filter(item => item.dataset.checked === "true").length; const score = mockCards.filter(item => item.classList.contains("answered-correct")).length;
+  progress.textContent = `${answered} / ${mockCards.length}`;
+  document.querySelector("#result").textContent = answered === mockCards.length ? `Mock test complete · Score: ${score} / ${mockCards.length}` : `${correct ? "Correct" : "Incorrect"} · Score: ${score} / ${answered} answered`;
+  try { localStorage.setItem(mockStorageKey, JSON.stringify(mockCards.map(item => item.querySelector("input:checked")?.value ?? null))); } catch (_) {}
+}
+mockForm.addEventListener("change", event => { const card = event.target.closest(".question"); if (card) answerMockQuestion(card, mockCards.indexOf(card)); });
+let savedMock = null; try { savedMock = JSON.parse(localStorage.getItem(mockStorageKey) || "null"); } catch (_) {}
+if (Array.isArray(savedMock)) mockCards.forEach((card, index) => { if (savedMock[index] == null) return; const input = card.querySelector(`input[value="${CSS.escape(String(savedMock[index]))}"]`); if (input) { input.checked = true; answerMockQuestion(card, index); } });
 
 
 // Dashboard presentation and controls
@@ -301,7 +337,11 @@ function openPracticeQuiz(topic) {
   player.hidden = false; document.getElementById("dashboard-overview").hidden = true; document.getElementById("quiz-topic-cards").hidden = true; document.getElementById("numerical-topic-cards").hidden = true;
   player.querySelector("h3").textContent = title; player.querySelector(".quiz-mount").replaceChildren(form, submit, result); renderMath(player); player.scrollIntoView({behavior:"smooth", block:"start"});
 }
-document.getElementById("quiz-topic-cards").addEventListener("click", event => { const card = event.target.closest("a[data-topic-card]"); if (!card) return; event.preventDefault(); openPracticeQuiz(card.dataset.topicCard); });
+document.getElementById("quiz-topic-cards").addEventListener("click", event => { const card = event.target.closest("a[data-topic-card]"); if (!card) return; event.preventDefault(); event.stopPropagation(); openPracticeQuiz(card.dataset.topicCard); });
+document.getElementById("numerical-topic-cards").addEventListener("click", event => {
+  const card = event.target.closest('a[data-topic-card][data-kind="numerical"]'); if (!card) return;
+  event.preventDefault(); event.stopPropagation(); openPracticeQuiz(card.dataset.topicCard);
+});
 document.querySelector(".back-to-quiz-list").addEventListener("click", () => { if (returnToStudyMode) { returnToStudyMode = false; openStudyMode(currentStudyUnit); return; } document.getElementById("practice-quiz-player").hidden = true; document.getElementById("dashboard-overview").hidden = false; setHubTab("quiz"); });
 function openPracticeHubFor(topic) {
   showPracticeHubOnly();
@@ -371,18 +411,43 @@ document.getElementById("hub-filters").addEventListener("click", event => {
   const button = event.target.closest(".hub-filter");
   if (button) { lastSelectedTopic = button.dataset.topic === "all" ? lastSelectedTopic : button.dataset.topic; applyHubTopicFilter(button.dataset.topic); }
 });
-document.getElementById("reset-quiz").addEventListener("click", () => {
-  allQuizForms.forEach(form => {
+let resetTargetTopic = null;
+function resetQuizForms(forms) {
+  forms.forEach(form => {
     form.reset();
     form.querySelectorAll("input").forEach(input => input.disabled = false);
-    form.querySelectorAll(".question").forEach(card => { card.classList.remove("answered-correct", "answered-wrong"); card.querySelectorAll(".explanation").forEach(note => note.remove()); });
+    form.querySelectorAll(".question").forEach(card => { card.classList.remove("answered-correct", "answered-wrong"); delete card.dataset.checked; card.querySelectorAll(".explanation").forEach(note => note.remove()); });
+    try { localStorage.removeItem(`dl-contest-2-answers:${form.id}`); } catch (_) {}
     const button = document.querySelector(`[data-quiz="${form.id}"]`); if (button) button.disabled = true;
   });
-  document.querySelectorAll("#submit").forEach(button => button.disabled = true);
-  document.querySelectorAll("#result,[id$='-result']").forEach(result => result.textContent = "");
+  document.querySelectorAll("#result,[id$='-result']").forEach(result => {
+    if (forms.some(form => form.id === "quiz" ? result.id === "result" : result.id === `${form.id.replace("-quiz", "")}-result`)) result.textContent = "";
+  });
+  if (forms.some(form => form.id === "quiz")) { document.getElementById("progress").textContent = `0 / ${mockCards.length}`; document.getElementById("submit").disabled = true; }
   updateDashboardProgress();
   renderMath();
+}
+document.getElementById("reset-quiz").addEventListener("click", () => {
+  const openForm = document.querySelector("#practice-quiz-player .quiz-mount form");
+  const activeFilter = document.querySelector(".hub-filter.active")?.dataset.topic;
+  const openNotes = document.querySelector(".topic-card[open].lesson");
+  resetTargetTopic = openForm?.dataset.topic || (activeFilter && activeFilter !== "all" ? activeFilter : openNotes?.id || lastSelectedTopic);
+  const topicForm = allQuizForms.find(form => form.dataset.topic === resetTargetTopic);
+  const topicName = document.querySelector(`#quiz-topic-cards [data-topic-card="${resetTargetTopic}"] b`)?.textContent || resetTargetTopic;
+  document.getElementById("reset-dialog-copy").textContent = topicForm ? `Choose whether to clear ${topicName} or all saved quiz answers.` : "Choose whether to clear all saved quiz answers.";
+  document.getElementById("reset-current-topic").hidden = !topicForm;
+  document.getElementById("reset-current-topic").textContent = `Reset ${topicForm ? topicName : "this topic"}`;
+  document.getElementById("reset-dialog").showModal();
 });
+document.getElementById("reset-current-topic").addEventListener("click", () => {
+  const forms = allQuizForms.filter(form => form.dataset.topic === resetTargetTopic);
+  document.getElementById("reset-dialog").close(); resetQuizForms(forms);
+});
+document.getElementById("reset-all-topics").addEventListener("click", () => {
+  document.getElementById("reset-dialog").close(); resetQuizForms(allQuizForms); lastSelectedTopic = null;
+});
+document.getElementById("cancel-reset").addEventListener("click", () => document.getElementById("reset-dialog").close());
+document.getElementById("reset-dialog").addEventListener("click", event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
 document.getElementById("concept-search").addEventListener("input", event => {
   const term = event.target.value.trim().toLocaleLowerCase();
   clearTopicFilter();
