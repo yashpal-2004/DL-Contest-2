@@ -261,9 +261,12 @@ function showNotesMode() {
   document.querySelectorAll(".topic-card").forEach(card => { card.classList.remove("hidden-by-search", "hidden-by-filter"); card.open = false; });
   allQuizForms.forEach(form => document.querySelector(`[data-quiz="${form.id}"]`)?.closest("details.topic-card")?.classList.add("quiz-in-hub-only"));
   document.body.classList.add("notes-mode");
-  document.getElementById("back-to-notes").innerHTML = '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg><span>Practice Hub</span>';
+  document.getElementById("back-to-notes").innerHTML = '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6M9 12h11"/></svg><span>Practice Hub</span>';
 }
-document.getElementById("back-to-notes").addEventListener("click", showNotesMode);
+document.getElementById("back-to-notes").addEventListener("click", () => {
+  if (document.body.classList.contains("notes-mode")) showPracticeHubOnly();
+  else showNotesMode();
+});
 document.getElementById("hub-quizzes-tab").addEventListener("click", () => setHubTab("quiz"));
 document.getElementById("hub-numericals-tab").addEventListener("click", () => setHubTab("numerical"));
 function setHubTab(kind) {
@@ -333,7 +336,7 @@ document.addEventListener("click", event => {
     document.querySelectorAll(".topic-card").forEach(item => item.classList.toggle("hidden-by-filter", item !== card));
     document.getElementById("practice-hub-section").classList.add("hidden-by-filter");
     document.body.classList.add("notes-mode");
-    document.getElementById("back-to-notes").innerHTML = '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 0 0 1 0 12h-2"/></svg><span>Practice Hub</span>';
+    document.getElementById("back-to-notes").innerHTML = '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6M9 12h11"/></svg><span>Practice Hub</span>';
     card.open = true;
     renderMath(card);
   } else if (target?.id === "practice-hub-section") {

@@ -10,3 +10,4 @@
 
 /* Keep lesson content within its card and style the separate quiz action. */
 .topic-content{min-width:0;overflow-wrap:anywhere}.topic-content p,.topic-content li,.topic-content td,.topic-content th{overflow-wrap:anywhere;word-break:normal}.topic-content .callout{max-width:100%;white-space:normal}.open-topic-quiz{display:inline-flex;align-items:center;gap:8px;margin:20px 0 4px;padding:10px 15px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:2px;font:inherit;cursor:pointer}.open-topic-quiz:hover{background:#e6dfc9}.open-topic-quiz:focus-visible{outline:2px solid #8d6c22;outline-offset:2px}
+
