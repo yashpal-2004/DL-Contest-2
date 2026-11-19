@@ -194,6 +194,7 @@ submit.addEventListener("click", () => { let score = 0; mockCards.forEach(card =
 
 
 // Dashboard presentation and controls
+const quizBank = document.createElement("div"); quizBank.id = "quiz-bank"; quizBank.hidden = true; document.querySelector("main").append(quizBank);
 const lessonSections = [...document.querySelectorAll("main > section.lesson, main > section.test-section")];
 lessonSections.forEach((section, index) => {
   const title = section.querySelector("h2")?.textContent || "Mock Test";
@@ -203,10 +204,11 @@ lessonSections.forEach((section, index) => {
   const isMock = section.classList.contains("test-section");
   const details = document.createElement("details");
   details.className = "topic-card";
+  if (!isMock) details.classList.add("lesson");
   details.id = section.id;
   const summary = document.createElement("summary");
   const icon = document.createElement("span"); icon.className = "topic-icon"; icon.setAttribute("aria-hidden", "true"); icon.innerHTML = section.classList.contains("test-section") ? '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.5 2.5L16 9"/></svg>' : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>';
-  const name = document.createElement("span"); name.textContent = title;
+  const name = document.createElement("span"); name.className = "topic-name"; name.textContent = title;
   const label = document.createElement("span"); label.className = "topic-label"; label.textContent = isMock ? "35 MCQs · all units" : "theory · revision";
   summary.append(icon, name, label);
   const content = document.createElement("div"); content.className = "topic-content";
@@ -219,11 +221,88 @@ lessonSections.forEach((section, index) => {
   else {
     const action = document.createElement("button"); action.className = "open-topic-quiz"; action.type = "button"; action.innerHTML = '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h11v16H5V7zM8 4v4h8V4M8 13h8M8 16h5"/></svg><span>Open unit quiz in Practice Hub</span>';
     action.addEventListener("click", () => openPracticeHubFor(section.id)); content.append(action);
+    quizBank.append(...quizForms, ...quizButtons, ...quizResults);
   }
   details.append(summary, content);
   section.replaceWith(details);
 });
 const totalQuestions = 140;
+const allQuizForms = [...document.querySelectorAll("main form")];
+let lastSelectedTopic = null;
+let currentStudyUnit = null;
+let returnToStudyMode = false;
+const notesDoneKey = "dl-contest-2-notes-done";
+const topicForForm = form => form.id === "quiz" ? "mock-test" : form.id.replace("unit", "unit-").replace("-quiz", "");
+allQuizForms.forEach(form => {
+  form.dataset.topic = topicForForm(form);
+  const section = form.closest("details.topic-card");
+  const button = section?.querySelector(`[data-quiz="${form.id}"]`);
+  const result = button?.dataset.result ? document.getElementById(button.dataset.result) : document.getElementById("result");
+  quizBank.append(form);
+  if (button) quizBank.append(button);
+  if (result) quizBank.append(result);
+});
+function readNotesDone() { try { return JSON.parse(localStorage.getItem(notesDoneKey) || "{}"); } catch (_) { return {}; } }
+function renderUnitOverview() {
+  const grid = document.getElementById("unit-progress-grid"); if (!grid) return;
+  const done = readNotesDone(); grid.replaceChildren();
+  document.querySelectorAll(".topic-card.lesson").forEach(unit => {
+    const form = allQuizForms.find(item => item.dataset.topic === unit.id);
+    const questions = form ? [...form.querySelectorAll(".question")] : [];
+    const attempted = questions.filter(question => question.dataset.checked === "true").length;
+    const correct = questions.filter(question => question.classList.contains("answered-correct")).length;
+    const card = document.createElement("article"); card.className = "unit-progress-card";
+    const heading = document.createElement("h4"); heading.textContent = unit.querySelector("summary .topic-name")?.textContent || unit.id;
+    const noteState = document.createElement("p"); noteState.className = "unit-note-state"; noteState.textContent = `Notes: ${done[unit.id] ? "Done" : "Not marked done"}`;
+    const stats = document.createElement("p"); stats.className = "unit-quiz-stats"; stats.textContent = `Practice: ${attempted}/${questions.length} answered · ${correct} correct`;
+    const track = document.createElement("div"); track.className = "unit-progress-track"; const fill = document.createElement("span"); fill.style.width = `${questions.length ? attempted / questions.length * 100 : 0}%`; track.append(fill);
+    const button = document.createElement("button"); button.type = "button"; button.className = "open-study-mode"; button.dataset.unit = unit.id; button.textContent = "Open Study Mode";
+    card.append(heading, noteState, stats, track, button); grid.append(card);
+  });
+}
+function setStudyView(view) {
+  document.getElementById("study-notes-view").hidden = view !== "notes";
+  document.getElementById("study-formulas-view").hidden = view !== "formulas";
+  document.querySelectorAll(".study-mode-tab[data-study-view]").forEach(button => button.classList.toggle("active", button.dataset.studyView === view));
+}
+function openStudyMode(unitId) {
+  currentStudyUnit = unitId; returnToStudyMode = false;
+  const unit = document.getElementById(unitId); const content = unit?.querySelector(".topic-content"); if (!unit || !content) return;
+  const hub = document.getElementById("practice-hub-section");
+  hub.querySelector(".hub-tabs").hidden = true; hub.querySelector(".hub-description").hidden = true; hub.querySelector(".hub-filters").hidden = true;
+  document.getElementById("quiz-topic-cards").hidden = true; document.getElementById("numerical-topic-cards").hidden = true;
+  document.getElementById("dashboard-overview").hidden = true; document.getElementById("practice-quiz-player").hidden = true;
+  const panel = document.getElementById("study-mode-panel"); panel.hidden = false;
+  document.getElementById("study-mode-title").textContent = unit.querySelector("summary .topic-name")?.textContent || unitId;
+  const notes = content.cloneNode(true); notes.querySelectorAll(".open-topic-quiz").forEach(button => button.remove()); document.getElementById("study-notes-view").replaceChildren(notes);
+  const formulasView = document.getElementById("study-formulas-view"); formulasView.replaceChildren();
+  const contexts = [...content.querySelectorAll(".formula-list article")];
+  [...content.querySelectorAll(".formula")].forEach(node => contexts.push(node.closest(".formula-list article, .grid article") || node.closest("p, li") || node.parentElement));
+  if (!contexts.length) [...content.querySelectorAll("p, li, article")].filter(node => node.textContent.includes("\\(") || node.querySelector(".katex")).forEach(node => { if (!contexts.some(parent => parent.contains(node))) contexts.push(node); });
+  const unique = [...new Set(contexts)];
+  if (!unique.length) { const message = document.createElement("p"); message.className = "formula-empty"; message.textContent = "No standalone formulas in this unit."; formulasView.append(message); }
+  else unique.forEach(context => { const item = document.createElement("article"); item.className = "study-formula-card"; item.innerHTML = context.outerHTML; formulasView.append(item); });
+  document.getElementById("mark-notes-done").textContent = readNotesDone()[unitId] ? "Mark notes not done" : "Mark notes done";
+  setStudyView("notes"); renderMath(panel);
+}
+document.getElementById("unit-progress-grid").addEventListener("click", event => { const button = event.target.closest(".open-study-mode"); if (button) openStudyMode(button.dataset.unit); });
+document.getElementById("back-to-overview").addEventListener("click", () => {
+  document.getElementById("study-mode-panel").hidden = true; document.getElementById("dashboard-overview").hidden = false;
+  const hub = document.getElementById("practice-hub-section"); hub.querySelector(".hub-tabs").hidden = false; hub.querySelector(".hub-description").hidden = false; hub.querySelector(".hub-filters").hidden = false; setHubTab("quiz");
+});
+document.querySelectorAll(".study-mode-tab[data-study-view]").forEach(button => button.addEventListener("click", () => setStudyView(button.dataset.studyView)));
+document.getElementById("mark-notes-done").addEventListener("click", () => { const done = readNotesDone(); done[currentStudyUnit] = !done[currentStudyUnit]; try { localStorage.setItem(notesDoneKey, JSON.stringify(done)); } catch (_) {} document.getElementById("mark-notes-done").textContent = done[currentStudyUnit] ? "Mark notes not done" : "Mark notes done"; renderUnitOverview(); });
+function openPracticeQuiz(topic) {
+  lastSelectedTopic = topic; showPracticeHubOnly(); setHubTab("quiz"); applyHubTopicFilter(topic);
+  const form = allQuizForms.find(item => item.dataset.topic === topic); const player = document.getElementById("practice-quiz-player"); if (!form || !player) return;
+  const submit = form.id === "quiz" ? document.getElementById("submit") : document.querySelector(`[data-quiz="${form.id}"]`);
+  const result = form.id === "quiz" ? document.getElementById("result") : document.getElementById(submit.dataset.result);
+  const title = document.querySelector(`#quiz-topic-cards [data-topic-card="${topic}"] b`)?.textContent || "Practice Quiz";
+  player.hidden = false; document.getElementById("dashboard-overview").hidden = true; document.getElementById("quiz-topic-cards").hidden = true; document.getElementById("numerical-topic-cards").hidden = true;
+  player.querySelector("h3").textContent = title; player.querySelector(".quiz-mount").replaceChildren(form, submit, result); renderMath(player); player.scrollIntoView({behavior:"smooth", block:"start"});
+}
+document.getElementById("quiz-topic-cards").addEventListener("click", event => { const card = event.target.closest("a[data-topic-card]"); if (!card) return; event.preventDefault(); openPracticeQuiz(card.dataset.topicCard); });
+document.querySelector(".back-to-quiz-list").addEventListener("click", () => { if (returnToStudyMode) { returnToStudyMode = false; openStudyMode(currentStudyUnit); return; } document.getElementById("practice-quiz-player").hidden = true; document.getElementById("dashboard-overview").hidden = false; setHubTab("quiz"); });
 function openPracticeHubFor(topic) {
   showPracticeHubOnly();
   setHubTab("quiz");
@@ -232,13 +311,13 @@ function openPracticeHubFor(topic) {
 }
 function renderMath(root = document.querySelector("main")) { if (window.renderMathInElement) renderMathInElement(root, {delimiters:[{left:"\\(",right:"\\)",display:false}], throwOnError:false}); }
 renderMath();
-const allQuizForms = [...document.querySelectorAll("main form")];
 function updateDashboardProgress() {
   const answered = document.querySelectorAll('main input[type="radio"]:checked').length;
   const correct = document.querySelectorAll("main .question.answered-correct").length;
   document.getElementById("answered-count").textContent = `${answered}/${totalQuestions}`;
   document.getElementById("correct-count").textContent = correct;
   document.getElementById("quiz-progress").style.width = `${Math.min(100, answered / totalQuestions * 100)}%`;
+  renderUnitOverview();
 }
 document.querySelectorAll("main form").forEach(form => form.addEventListener("change", updateDashboardProgress));
 document.getElementById("expand-all").addEventListener("click", () => document.querySelectorAll(".topic-card:not(.hidden-by-filter):not(.hidden-by-search)").forEach(card => card.open = true));
@@ -253,6 +332,13 @@ function showPracticeHubOnly() {
   document.querySelectorAll(".topic-card").forEach(card => { card.classList.add("hidden-by-filter"); card.open = false; });
   document.body.classList.remove("notes-mode");
   document.getElementById("practice-hub-section").classList.remove("hidden-by-filter", "hidden-by-search");
+  document.getElementById("dashboard-overview").hidden = false;
+  document.getElementById("study-mode-panel").hidden = true;
+  document.getElementById("practice-quiz-player").hidden = true;
+  document.getElementById("quiz-topic-cards").hidden = false;
+  document.getElementById("numerical-topic-cards").hidden = true;
+  const hub = document.getElementById("practice-hub-section");
+  hub.querySelector(".hub-tabs").hidden = false; hub.querySelector(".hub-description").hidden = false; hub.querySelector(".hub-filters").hidden = false;
   document.getElementById("back-to-notes").innerHTML = '<svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-2"/></svg><span>Back to notes</span>';
 }
 function showNotesMode() {
@@ -269,6 +355,7 @@ document.getElementById("back-to-notes").addEventListener("click", () => {
 });
 document.getElementById("hub-quizzes-tab").addEventListener("click", () => setHubTab("quiz"));
 document.getElementById("hub-numericals-tab").addEventListener("click", () => setHubTab("numerical"));
+document.getElementById("study-mode-quiz").addEventListener("click", () => { returnToStudyMode = true; openPracticeQuiz(currentStudyUnit); });
 function setHubTab(kind) {
   document.getElementById("hub-quizzes-tab").classList.toggle("active", kind === "quiz");
   document.getElementById("hub-numericals-tab").classList.toggle("active", kind === "numerical");
@@ -282,7 +369,7 @@ function applyHubTopicFilter(topic) {
 }
 document.getElementById("hub-filters").addEventListener("click", event => {
   const button = event.target.closest(".hub-filter");
-  if (button) applyHubTopicFilter(button.dataset.topic);
+  if (button) { lastSelectedTopic = button.dataset.topic === "all" ? lastSelectedTopic : button.dataset.topic; applyHubTopicFilter(button.dataset.topic); }
 });
 document.getElementById("reset-quiz").addEventListener("click", () => {
   allQuizForms.forEach(form => {
