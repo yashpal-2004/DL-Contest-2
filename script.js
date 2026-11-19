@@ -241,6 +241,7 @@ lessonSections.forEach((section, index) => {
   const details = document.createElement("details");
   details.className = "topic-card";
   if (!isMock) details.classList.add("lesson");
+  else details.classList.add("test-section");
   details.id = section.id;
   const summary = document.createElement("summary");
   const icon = document.createElement("span"); icon.className = "topic-icon"; icon.setAttribute("aria-hidden", "true"); icon.innerHTML = section.classList.contains("test-section") ? '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8 12 2.5 2.5L16 9"/></svg>' : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>';
@@ -261,6 +262,15 @@ lessonSections.forEach((section, index) => {
   }
   details.append(summary, content);
   section.replaceWith(details);
+});
+const lessonGrid = document.createElement("div"); lessonGrid.className = "lesson-bento-grid";
+const lessonCards = [...document.querySelectorAll("main > details.topic-card.lesson")];
+if (lessonCards.length) { lessonCards[0].before(lessonGrid); lessonGrid.append(...lessonCards); }
+lessonGrid.addEventListener("click", event => {
+  const summary = event.target.closest("summary"); if (!summary) return;
+  const card = summary.closest("details.topic-card.lesson"); if (!card) return;
+  event.preventDefault();
+  document.querySelector(`.topic-nav a[href="#${card.id}"]`)?.click();
 });
 const totalQuestions = 140;
 const allQuizForms = [...document.querySelectorAll("main form")];
